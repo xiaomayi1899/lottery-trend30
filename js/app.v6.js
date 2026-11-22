@@ -10,6 +10,17 @@
   const GAMES = Engine.GAMES;
   const KEYS = ["ssq", "dlt", "kl8", "fc3d"];
 
+  /* 期号 +1：同年内直接递增；跨年边界无法确定真实期号时返回 null（显示“下一期”） */
+  function nextIssue(issue) {
+    const s0 = String(issue || "");
+    if (!/^\d+$/.test(s0)) return null;
+    const s1 = String(parseInt(s0, 10) + 1);
+    if (s1.length !== s0.length) return null;
+    const yearLen = s0.length >= 7 ? 4 : (s0.length === 5 ? 2 : 0);
+    if (yearLen && s1.slice(0, yearLen) !== s0.slice(0, yearLen)) return null;
+    return s1;
+  }
+
   /* ============ 数据层 ============ */
   const LS_KEY = "lt30_data_v1";
   const SNAP = window.__SNAPSHOT__ || { builtAt: "", ssq: [], dlt: [], kl8: [], fc3d: [] };
@@ -334,6 +345,7 @@
       '<div class="votes num">' + esc(formLine) + "</div>" +
       '<div class="upto">截至第 ' + esc(r.upto.issue) + " 期（" + esc(r.upto.date) + " 开奖）· 分析最近 " + r.upto.count +
       " 期走势 · 计算 " + r.ms + "ms<br>" +
+      (nextIssue(r.upto.issue) ? "本页推荐为 <strong class=\"num\">第 " + esc(nextIssue(r.upto.issue)) + " 期</strong> 的预测（用≤" + esc(r.upto.issue) + "数据 · 开奖后自动存档核对）<br>" : "本页推荐为下一期的预测（开奖后自动存档核对）<br>") +
       "再次强调：推荐是统计整理输出，与随机对照的中奖概率完全相同。</div></div>";
   }
 
@@ -388,6 +400,7 @@
         return '<details class="step"><summary>预测第' + esc(row.issue) + "期（用≤" + esc(row.basedOn) + "数据） · " + row.cells.join("/") + "</summary><div class=\"body\">" + body + "</div></details>";
       };
       h += '<div style="margin-top:8px">' + r.rows.slice().reverse().map(revRow).join("") + "</div>";
+      h += '<div class="hint mono"><strong>预测第' + esc(nextIssue(lastIssue) || "下一期") + '期（用≤' + esc(lastIssue) + '数据）</strong> · 预测号码见页顶「形态合成推荐」，开奖后自动核对（见存档核对卡）</div>';
       h += '<div class="hint" style="margin-top:8px">复盘命中贴近随机期望 = 正常且符合「开奖独立随机」；此表长期记录策略真实水位。</div>';
     } else if (cached) {
       h += '<div class="hint">上次复盘基于第 ' + esc(cached.upto) + ' 期数据，数据已更新，请重新运行。</div>';
@@ -430,7 +443,7 @@
         });
         h += '<div class="hint mono">基于第' + esc(r.basedOn) + "期 → 实开第" + esc(r.gr.issue) + "期（" + esc(r.gr.date) + "）：" + parts.join(" · ") + "</div>";
       } else {
-        h += '<div class="hint mono">基于第' + esc(r.basedOn) + "期分析 · 待下期开奖核对（" + r.sets.length + " 注已存档）</div>";
+        h += '<div class="hint mono">基于第' + esc(r.basedOn) + "期分析 · 预测第" + esc(nextIssue(r.basedOn) || "下一期") + "期 · 待其开奖后核对（" + r.sets.length + " 注已存档）</div>";
       }
     }
     h += '<div class="hint" style="margin-top:8px">随机期望命中：' + (cfg.type === "digits" ? "各位直选 " : "号码 ") + expF +
