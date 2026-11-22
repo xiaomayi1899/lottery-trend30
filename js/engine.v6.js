@@ -507,8 +507,8 @@
     ], cand: { f: new Set(fMain), b: cfg.bk ? new Set(bMain) : new Set() }, why: "马尔可夫形态约束 + 多视角平滑评分合成" });
     // 走前回测（walk-forward）：每期只用其之前的 30 期预测，对照真实开奖；同时计算随机基线
     const bt = (function () {
-      const N = Math.min(150, all.length - WINDOW - 1);
-      if (N < 30) return null;
+      const N = Math.min(30, all.length - WINDOW - 1);
+      if (N < 10) return null;
       let oHit = 0, oHit1 = 0, oB0 = 0, oB1 = 0, sHit = 0, sCov = 0, n2 = 0;
       for (let i = WINDOW; i < WINDOW + N; i++) {
         const hist = all.slice(i - WINDOW, i);
@@ -535,20 +535,18 @@
       "和值带覆盖：真实和值入带 " + Math.round(bt.sHit * 100) + "%，同一带宽对历史和值的平均覆盖 " + Math.round(bt.sCov * 100) + "%（基线）",
       "结论：命中率与随机基线接近（差异在 150 期抽样的波动范围内）→ 没有可靠预测力，符合「每期独立随机」；回测用于验证模型诚实度",
       "⚠ 回测命中率≈基线是正常且预期的结果，请以此理解所有推荐的本质",
-    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第十节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
+    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第十节 · 模型回测", lines: ["历史数据不足 41 期，暂无法回测"], cand: null, why: "走前回测" });
     {
       const rel = relationLab(key);
       if (rel) {
         const L = [];
-        L.push("滞后共现 lift 检验：全历史 " + rel.tests + " 对（lag 1-3，Bonferroni 校正 α=" + rel.alpha.toExponential(1) + "）");
-        L.push("|z| 最大的 3 对：" + rel.pairsTop.map(function(p) { return pad2(p.j) + "→" + pad2(p.i) + "(lag" + p.lag + ",lift " + p.lift.toFixed(2) + ",p=" + p.p.toExponential(1) + (p.sig ? "★显著" : "") + ")"; }).join(" · "));
-        L.push("和值自相关：lag1 r=" + rel.acf.sum[0].r.toFixed(3) + "(p=" + rel.acf.sum[0].p.toFixed(3) + ") · lag2 r=" + rel.acf.sum[1].r.toFixed(3) + " · lag3 r=" + rel.acf.sum[2].r.toFixed(3));
-        L.push("奇数个数自相关：lag1 r=" + rel.acf.odd[0].r.toFixed(3) + "(p=" + rel.acf.odd[0].p.toFixed(3) + ")");
-        L.push("游程检验（奇占优/偶占优序列）：z=" + rel.runs.z.toFixed(2) + ",p=" + rel.runs.p.toFixed(3));
-        const anySig = rel.pairsTop.some(function(p) { return p.sig; }) || rel.acf.sum[0].p < rel.alpha || rel.runs.p < rel.alpha;
-        L.push(anySig ? "结论：存在个别统计显著关系 → 已按校准机制纳入权重（仍需更多数据验证）" : "结论：未发现任何通过显著性检验的可利用关系 → 这是独立随机的直接证据");
-        L.push("⚠ 显著性检验用全历史（检验性质，不受 30 期窗口限制）；结论如实展示，无论是否显著都不改变中奖概率");
-        out.sections.push({ title: "第十一节 · 关系研究（滞后/自相关/游程全历史检验）", lines: L, cand: null, why: "研究维度：滞后lift/自相关/游程" });
+        L.push("滞后共现观察（lag 1-3 · 30 期小样本 · 仅描述性，无法做显著性检验）：");
+        L.push("|z| 最大的 3 对：" + rel.pairsTop.map(function(p) { return pad2(p.j) + "→" + pad2(p.i) + "(lag" + p.lag + ",lift " + p.lift.toFixed(2) + ")"; }).join(" · "));
+        L.push("和值自相关（描述）：lag1 r=" + rel.acf.sum[0].r.toFixed(3) + " · lag2 r=" + rel.acf.sum[1].r.toFixed(3) + " · lag3 r=" + rel.acf.sum[2].r.toFixed(3));
+        L.push("奇数个数自相关（描述）：lag1 r=" + rel.acf.odd[0].r.toFixed(3));
+        L.push("游程（描述）：z=" + rel.runs.z.toFixed(2));
+        L.push("结论：30 期样本太小，任何“规律”都无法与噪声区分——如实展示观察值，不装显著、不装预测");
+        out.sections.push({ title: "第十一节 · 关系研究（30 期描述性观察）", lines: L, cand: null, why: "研究维度：滞后lift/自相关/游程" });
       }
     }
     out.ms = Date.now() - t0;
@@ -765,8 +763,8 @@
       "⚠ 所有推荐均为统计整理输出，与随机对照的中奖概率完全相同",
     ], cand: { f: new Set(fMain), b: null }, why: "马尔可夫转移 + 平滑评分合成" });
     const bt = (function () {
-      const N = Math.min(150, all.length - WINDOW - 1);
-      if (N < 30) return null;
+      const N = Math.min(30, all.length - WINDOW - 1);
+      if (N < 10) return null;
       let oHit = 0, oHit1 = 0, oB0 = 0, oB1 = 0, sHit = 0, sCov = 0, n2 = 0;
       for (let i = WINDOW; i < WINDOW + N; i++) {
         const hist = all.slice(i - WINDOW, i);
@@ -792,20 +790,20 @@
       "和值带覆盖：真实和值入带 " + Math.round(bt.sHit * 100) + "%，同一带宽对历史和值的平均覆盖 " + Math.round(bt.sCov * 100) + "%（基线）",
       "结论：命中率与随机基线接近（差异在 150 期抽样的波动范围内）→ 没有可靠预测力，符合「每期独立随机」",
       "⚠ 回测命中率≈基线是正常且预期的结果，请以此理解所有推荐的本质",
-    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第九节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
+    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第九节 · 模型回测", lines: ["历史数据不足 41 期，暂无法回测"], cand: null, why: "走前回测" });
     out.ms = Date.now() - t0;
     out.digitStats = ts;
     return out;
   }
 
-  /* 走前校准（复盘修正核心）：对冷热/遗漏回补/共现三个维度分别做全历史（最多 400 期）walk-forward 归因——
+  /* 走前校准（复盘修正核心）：对冷热/遗漏回补/共现三个维度分别做最近 60 个预测点的 walk-forward 归因——
      每期只用其之前 30 期算维度得分、取前 fk 个号，统计场均命中相对随机基线的比值，夹在 [0.6, 1.4] 后作为权重。
      这是 wjt0321/lottery-predictor「归档回测持续调权」思路的轻量实现；比值≈1 即该维度无超额信息。 */
   function calibrate(key) {
     const cfg = GAMES[key];
     const all = DATA[key];
-    if (!all || all.length < WINDOW + 31) return null;
-    const N = Math.min(400, all.length - WINDOW - 1);
+    if (!all || all.length < WINDOW + 11) return null;
+    const N = Math.min(60, all.length - WINDOW - 1);
     const agg = { hot: 0, due: 0, co: 0, base: 0, n: 0 };
     for (let i = WINDOW; i < WINDOW + N; i++) {
       const hist = all.slice(i - WINDOW, i);
@@ -921,12 +919,12 @@
     return null;
   }
 
-  /* ---------- 关系研究：全历史滞后共现 lift / 形态自相关 / 游程检验（带多重检验校正） ---------- */
+  /* ---------- 关系研究：30 期滞后共现 lift / 自相关 / 游程（小样本描述性） ---------- */
   function relationLab(key) {
     const cfg = GAMES[key];
     const all = DATA[key];
-    if (!all || all.length < 200) return null;
-    const fSets = all.map((d) => new Set(d.nums.slice(0, cfg.draw)));
+    if (!all || all.length < WINDOW + 5) return null;
+    const fSets = all.slice(-30).map((d) => new Set(d.nums.slice(0, cfg.draw)));
     const N = fSets.length;
     const pI = new Array(cfg.fn + 1).fill(0);
     fSets.forEach(function(s) { for (const x of s) pI[x]++; });
@@ -940,7 +938,7 @@
         for (const j of fSets[t - lag]) { cntJ[j]++; for (const i of fSets[t]) cnt[j][i]++; }
       }
       for (let j = 1; j <= cfg.fn; j++) {
-        if (cntJ[j] < 30) continue;
+        if (cntJ[j] < 3) continue;
         for (let i = 1; i <= cfg.fn; i++) {
           if (i === j || pI[i] <= 0 || pI[i] >= 1) continue;
           const obs = cnt[j][i] / cntJ[j];

@@ -376,7 +376,6 @@
       h += '<div class="hint"><strong>统计判定：</strong>' + (allNs ? "四个策略场均命中的 95% 置信区间全部包住随机期望 1.09 —— 与随机在统计上无法区分；个别期看起来「还不如随机」是抽样波动，不是策略缺陷。" : "个别策略 p<0.05 —— 但 4 项多重比较下仍需谨慎，通常是抽样波动，系统会持续监控。") + "（检验已校正滑动窗口导致的序列自相关，朴素检验会虚报显著）</div>";
       h += '<div class="hint">最佳注（四注里最好的一注）场均命中 <strong>' + (r.best === undefined ? "-" : r.best.toFixed(2)) + "</strong> 个 · 主推显著性 z=" + (r.mainZ === undefined ? "-" : r.mainZ.toFixed(2)) + "（p=" + (r.mainP === undefined ? "-" : (r.mainP || 0).toFixed(3)) + "，p>0.05 = 与随机无显著差异）</div>";
       h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）· 共 " + r.rows.length + " 期走前模拟。每一行的含义：用<strong>该期之前</strong>的开奖数据为该期做预测，再对照该期实开——绝不用开奖后的数据装预测。</div>";
-      h += '<div class="hint"><strong>大样本结论：</strong>双色球 300 期回测中热号曾显示 p=0.011 的“显著优势”，扩到 1000 期后 p=0.595 完全消失，其余策略同理——短期显著多为噪声，这正是样本量必须拉满、结论必须过检验的原因。</div>';
       const rev = (nums, marks, blue) => {
         let s2 = "";
         (nums || []).forEach((n, i) => {
@@ -409,7 +408,7 @@
       h += '<div class="hint">上次复盘基于第 ' + esc(cached.upto) + ' 期数据，数据已更新，请重新运行。</div>';
     }
     h += '<div class="hint" id="' + g + '-hist-prog" style="min-height:14px"></div>' +
-      '<div class="btn-row"><button class="btn ghost" data-act="hist">运行历史复盘（最多 1000 期走前模拟）</button></div></div>';
+      '<div class="btn-row"><button class="btn ghost" data-act="hist">运行历史复盘（近 30 期走前模拟）</button></div></div>';
     return h;
   }
 
@@ -426,7 +425,7 @@
         return (l.auto ? "[自动]" : "[手动]") + " " + (d.getMonth() + 1) + "-" + d.getDate() + " 样本" + l.n + "期：冷热 " + l.old.hot.toFixed(2) + "→" + l.w.hot.toFixed(2) + " · 遗漏 " + l.old.due.toFixed(2) + "→" + l.w.due.toFixed(2) + " · 共现 " + l.old.co.toFixed(2) + "→" + l.w.co.toFixed(2);
       }).join("</div><div class=\"hint mono\">") + "</div>";
     }
-    h += '<div class="hint" style="margin-top:8px">校准 = 用全部已载入历史（每期只用其之前 30 期）分别测试三个维度单独选号的场均命中，相对随机基线调整权重（夹在 0.6–1.4）。单维度命中与基线的差异通常在噪声范围内，权重变化不改变中奖概率。</div>' +
+    h += '<div class="hint" style="margin-top:8px">校准 = 用最近 60 个预测点（每点只用其之前 30 期）分别测试三个维度单独选号的场均命中，相对随机基线调整权重（夹在 0.6–1.4）。单维度命中与基线的差异通常在噪声范围内，权重变化不改变中奖概率。</div>' +
       '<div class="btn-row"><button class="btn ghost" data-act="cal">运行校准</button></div></div>';
     return h;
   }
@@ -570,7 +569,7 @@
           const b2 = t;
           b2.disabled = true;
           const prog = $("#" + g + "-hist-prog");
-          const nRev = { ssq: 1000, dlt: 500, kl8: 200, fc3d: 1000 }[g] || 300;
+          const nRev = 30;
           if (prog) prog.textContent = "历史复盘计算中：0%（走前模拟 " + nRev + " 期）";
           Engine.historicalReview(g, nRev, function(pct) { if (prog) prog.textContent = "历史复盘计算中：" + pct + "%（走前模拟 " + nRev + " 期）"; }, function(r) {
             b2.disabled = false;
