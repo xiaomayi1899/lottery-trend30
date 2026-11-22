@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f0f10">
+<title>30期走势规律实验室</title>
+<meta name="description" content="双色球 / 大乐透 / 快乐8 / 福彩3D · 近30期走势形态推荐 · 仅供个人学习与娱乐">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="数字彩预测">
+<meta name="format-detection" content="telephone=no">
+<link rel="stylesheet" href="css/style.v6.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="9.5" cy="14.5" r="6"></circle>
+        <path d="M3.5 6.5l4.2 4.2 2.8-2.3 3.6 3.2"></path>
+        <path d="M14.5 5.5l3 3-3 3"></path>
+      </svg>
+    </span>
+    <div>
+      <h1>30期走势规律实验室</h1>
+      <div class="sub" id="netlabel">正在连接数据…</div>
+    </div>
+  </div>
+  <span class="netdot" id="netdot" role="img" aria-label="数据连接状态"></span>
+</header>
+
+<main id="main">
+  <section class="page" id="page-ssq" role="tabpanel" aria-label="双色球"></section>
+  <section class="page" id="page-dlt" role="tabpanel" aria-label="大乐透"></section>
+  <section class="page" id="page-kl8" role="tabpanel" aria-label="快乐8"></section>
+  <section class="page" id="page-fc3d" role="tabpanel" aria-label="3D"></section>
+
+  <section class="page" id="page-help" role="tabpanel" aria-label="说明">
+    <div class="card">
+      <div class="eyebrow">先说实话</div>
+      <div class="prose">
+        <p><strong>开奖是相互独立的随机事件。</strong>任何软件、任何模型都不能提高中奖概率——本工具的走势形态分析是对历史数据的统计整理与输出练习，它的价值是<strong>让你看清概率与期望</strong>（单注期望净收益为负、长期购彩必亏是大数定律下的必然），而不是预测号码。</p>
+        <p>仅对接<strong>国家官方彩票</strong>（中国福利彩票、中国体育彩票）公开数据，仅限个人学习与娱乐用途。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">推荐逻辑（近 30 期走势形态）</div>
+      <div class="prose">
+        <p>选号型彩种（双色球 / 大乐透 / 快乐8）：从<strong>和值 · 奇偶 · 质合 · 大小 · 区间 · 012路 · 走势图模式（重号 / 邻号 / 斜跳）· 冷热遗漏</strong>等维度统计；形态预测用<strong>一阶马尔可夫转移</strong>（上期形态 → 下期形态的转移分布，与窗口分布按 55/45 混合回退），和值带用<strong>条件化估计</strong>（窗口内与上期和值最接近的 8 期的下期和值，与全窗口趋势混合）；再在形态约束下按「综合 / 热号 / 回补 / 均衡」四种平滑评分（对数冷热 + 指数遗漏回补）合成推荐，另附纯随机对照。</p>
+        <p>数字型彩种（福彩3D）：各位<strong>一阶马尔可夫转移</strong>（上期该位数字 → 本期）+ 对数冷热 + 指数遗漏 + 012路亲和打分，和值带条件化，跨度/奇偶/大小形态马尔可夫预测（含组选形态统计）→ 约束合成直选推荐。</p>
+        <p>防过拟合与诚实度：冷热偏差先过<strong>卡方均匀性检验</strong>（不显著则降权）；推荐号码经 <strong>30 次 Bootstrap 重采样</strong>稳定性筛选；内置<strong>走前回测</strong>（每期只用其之前 50 期预测、对照真实开奖，并列出随机基线）——回测命中率与随机基线相当，这正是「每期独立随机」应有的结果。</p>
+        <p>推荐存档核对：每次点「开始分析」，五注推荐自动存入本机浏览器；下期开奖数据一到，自动回填每注命中情况（双色球/大乐透按号码个数＋后区，3D按直选命中位数），并列出随机期望命中数——长期看，存档命中率会贴近随机期望，这是开奖随机性最直观的个人验证。</p>
+        <p>这些维度本身没有预测力，价值在于把信息结构化、把概率看清楚。算法思路参考开源项目 <a href="https://github.com/zxz0119/lottery-ai-simulator" target="_blank" rel="noopener">lottery-ai-simulator（热号/冷号/遗漏/统计特征生成候选）</a>、<a href="https://github.com/snjyor/lucky_ball" target="_blank" rel="noopener">lucky_ball（历史数据分析）</a>、<a href="https://github.com/wjt0321/lottery-predictor" target="_blank" rel="noopener">lottery-predictor（马尔可夫链 + 共现频率 + 同尾形态）</a> 与 <a href="https://github.com/Callam7/LottoPipeline" target="_blank" rel="noopener">LottoPipeline（Monte Carlo 模拟管线）</a> 等，全部在本页本地计算，无第三方运行时依赖、不上传任何数据。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">安装到 iPhone 主屏幕</div>
+      <div class="prose">
+        <ol>
+          <li>用 <strong>Safari</strong> 打开本页（扫码或输入电脑显示的地址）</li>
+          <li>点底部工具栏的<strong>「分享」</strong>按钮</li>
+          <li>选择<strong>「添加到主屏幕」</strong> → 确认</li>
+          <li>以后从主屏幕图标打开，就是全屏独立 App</li>
+        </ol>
+        <div class="q">本站为纯静态 Pages 站点，数据由 GitHub 每日自动任务更新；添加到主屏幕可离线打开历史数据。</div>
+        </div>
+        <p>提示：本站无需电脑开机，手机直接用浏览器或主屏幕图标打开即可；数据每晚自动更新。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">数据来源</div>
+      <div class="prose">
+        <p>双色球 / 福彩3D / 快乐8：中国福利彩票发行管理中心官方接口；大乐透：中国体育彩票官方接口。数据由本机服务或 GitHub 每日自动任务更新，全量快照生成于 <strong id="snap-built">—</strong>；发布为 GitHub Pages 后，手机用流量即可访问，无需电脑开机。</p>
+        <p>开奖结果可在 cwl.gov.cn（福彩）与 sporttery.cn（体彩）官网核对。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">理性购彩</div>
+      <div class="prose">
+        <p>购彩是娱乐消费，不是投资。只花娱乐预算，不加仓、不借钱、不追号。未满 18 周岁不得购彩；如感觉沉迷，可拨打公益热线 400-858-1838。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar" role="tablist" aria-label="主导航">
+  <button class="tab-btn" data-page="page-ssq" role="tab" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="12" r="6"></circle><circle cx="16.5" cy="12" r="6"></circle></svg>
+    <span>双色球</span>
+  </button>
+  <button class="tab-btn" data-page="page-dlt" role="tab" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
+    <span>大乐透</span>
+  </button>
+  <button class="tab-btn" data-page="page-kl8" role="tab" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><circle cx="17" cy="7" r="1.6"></circle><circle cx="7" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="17" cy="12" r="1.6"></circle><circle cx="7" cy="17" r="1.6"></circle><circle cx="12" cy="17" r="1.6"></circle><circle cx="17" cy="17" r="1.6"></circle></svg>
+    <span>快乐8</span>
+  </button>
+  <button class="tab-btn" data-page="page-fc3d" role="tab" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="3.5" width="17" height="17" rx="3"></rect><circle cx="8.2" cy="8.2" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="15.8" cy="15.8" r="1.3"></circle></svg>
+    <span>3D</span>
+  </button>
+  <button class="tab-btn" data-page="page-help" role="tab" aria-selected="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5.2"></path><circle cx="12" cy="7.8" r="1" fill="currentColor" stroke="none"></circle></svg>
+    <span>说明</span>
+  </button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="data/snapshot.v6.js" defer></script>
+<script src="js/engine.v6.js" defer></script>
+<script src="js/app.v6.js" defer></script>
+</body>
+</html>
