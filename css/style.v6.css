@@ -71,6 +71,7 @@ main{padding:8px 16px 0}
 .ball.b{background:var(--zone-blue)}
 .ball.sm{width:27px;height:27px;font-size:13px}
 .ball.xs{width:22px;height:22px;font-size:11px}
+.ball.hit{outline:2px solid #f0b429;outline-offset:-2px}
 .vs{color:var(--muted);font-size:13px;margin:0 2px}
 
 .draw-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}

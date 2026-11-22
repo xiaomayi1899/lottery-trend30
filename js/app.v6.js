@@ -360,8 +360,33 @@
     if (fresh) {
       const r = cached.r;
       h += '<div class="hint mono">' + r.sets.map((s) => esc(s.tag) + " 场均命中 " + s.avg.toFixed(2)).join(" · ") + "</div>";
-      h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）</div>";
-      h += '<div class="hint mono">' + r.rows.map((row) => row.issue + "：" + row.cells.join("/")).join(" · ") + "</div>";
+      h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）· 共 " + r.rows.length + " 期走前模拟，逐期展开看「预测 vs 实开」逐号对比，金圈 = 命中。</div>";
+      const rev = (nums, marks, blue) => {
+        let s2 = "";
+        (nums || []).forEach((n, i) => {
+          const hit = marks && marks[i];
+          s2 += '<span class="ball ' + (blue ? "b" : "r") + ' xs' + (hit ? " hit" : "") + '">' + Engine.pad2(n) + "</span>";
+        });
+        return s2;
+      };
+      const revRow = (row) => {
+        const cfg2 = GAMES[g];
+        const front = row.actual.slice(0, cfg2.draw);
+        const back = cfg2.bk ? row.actual.slice(cfg2.draw) : [];
+        let body = '<div class="hint mono">实开：' + rev(front, null) + (back.length ? '<span class="vs">+</span>' + rev(back, null, true) : "") + "</div>";
+        row.sets.forEach((s, idx) => {
+          if (cfg2.type === "digits") {
+            const marks = s.f.map((v, p) => v === row.actual[p]);
+            body += '<div class="hint mono">' + esc(s.tag) + "：" + rev(s.f, marks) + "（中 " + row.cells[idx] + "/" + cfg2.pos + " 位）</div>";
+          } else {
+            const mf = s.f.map((x) => front.indexOf(x) >= 0);
+            const mb = s.b ? s.b.map((x) => back.indexOf(x) >= 0) : null;
+            body += '<div class="hint mono">' + esc(s.tag) + "：" + rev(s.f, mf) + (s.b && back.length ? '<span class="vs">+</span>' + rev(s.b, mb, true) : "") + "（红 " + row.cells[idx] + (mb ? "，后区命中 " + mb.filter(Boolean).length + " 个" : "") + "）</div>";
+          }
+        });
+        return '<details class="step"><summary>第' + esc(row.issue) + "期 · " + row.cells.join("/") + "</summary><div class=\"body\">" + body + "</div></details>";
+      };
+      h += '<div style="margin-top:8px">' + r.rows.slice().reverse().map(revRow).join("") + "</div>";
       h += '<div class="hint" style="margin-top:8px">复盘命中贴近随机期望 = 正常且符合「开奖独立随机」；此表长期记录策略真实水位。</div>';
     } else if (cached) {
       h += '<div class="hint">上次复盘基于第 ' + esc(cached.upto) + ' 期数据，数据已更新，请重新运行。</div>';

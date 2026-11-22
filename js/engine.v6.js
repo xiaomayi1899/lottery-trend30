@@ -810,6 +810,7 @@
         const front = act.nums.slice(0, cfg.draw);
         const back = cfg.bk ? act.nums.slice(cfg.draw) : null;
         const cells = [];
+        const setsOut = [];
         if (!tags) tags = r.sets.filter((s) => s.tag.indexOf("随机") < 0).map((s) => s.tag);
         r.sets.forEach((s) => {
           if (s.tag.indexOf("随机") >= 0) return;
@@ -818,13 +819,14 @@
           else { v = s.f.filter((x) => front.indexOf(x) >= 0).length; }
           cells.push(v);
           tagSum[s.tag] = (tagSum[s.tag] || 0) + v; tagCnt[s.tag] = (tagCnt[s.tag] || 0) + 1;
+          setsOut.push({ tag: s.tag, f: s.f.slice(), b: s.b ? s.b.slice() : null });
         });
         const af = act.nums.slice(0, cfg.draw);
         const actO = af.filter((x) => x % 2 === 1).length;
         const predO = parseInt(String(r.form.odd), 10);
         if (predO === actO) formHit++;
         if (Math.abs(predO - actO) <= 1) formTol++;
-        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), cells: cells });
+        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), cells: cells, sets: setsOut, actual: act.nums.slice() });
         cnt++;
       }
     } finally { DATA[key] = full; }
@@ -833,7 +835,7 @@
       n: cnt,
       sets: tags.map((tag) => ({ tag: tag, avg: (tagSum[tag] || 0) / (tagCnt[tag] || 1) })),
       formHit: formHit / cnt, formTol: formTol / cnt,
-      rows: rows.slice(-12),
+      rows: rows,
     };
   }
 
