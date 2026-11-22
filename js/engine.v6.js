@@ -843,6 +843,7 @@
     let formHit = 0, formTol = 0, cnt = 0;
     let bestSum = 0;
     const mainHits = [];
+    const hitSeries = {};
     const st = { i: full.length - M };
     const oneRow = function(i) {
       DATA[key] = full.slice(0, i);
@@ -861,6 +862,7 @@
         else { v = s.f.filter((x) => front.indexOf(x) >= 0).length; }
         cells.push(v);
         if (v > best) best = v;
+        (hitSeries[s.tag] = hitSeries[s.tag] || []).push(v);
         tagSum[s.tag] = (tagSum[s.tag] || 0) + v; tagCnt[s.tag] = (tagCnt[s.tag] || 0) + 1;
         setsOut.push({ tag: s.tag, f: s.f.slice(), b: s.b ? s.b.slice() : null });
       });
@@ -879,10 +881,26 @@
       if (!cnt || !tags) return null;
       const expF = cfg.type === "digits" ? cfg.pos / 10 : cfg.fk * cfg.draw / cfg.fn;
       const sdM = sdOf(mainHits);
-      const zM = (sdM > 0 && cnt > 1) ? ((mean(mainHits) - expF) * Math.sqrt(cnt) / sdM) : 0;
+      let rhoM = 0;
+      if (mainHits.length > 10) { let c = 0, v2 = 0; for (let t = 1; t < mainHits.length; t++) c += (mainHits[t] - mean(mainHits)) * (mainHits[t - 1] - mean(mainHits)); for (let t = 0; t < mainHits.length; t++) v2 += (mainHits[t] - mean(mainHits)) * (mainHits[t] - mean(mainHits)); rhoM = v2 > 0 ? c / v2 : 0; }
+      const nEffM = Math.max(2, Math.round(mainHits.length * (1 - rhoM) / (1 + rhoM)));
+      const seM = sdM / Math.sqrt(nEffM || 1);
+      const zM = seM > 0 ? ((mean(mainHits) - expF) / seM) : 0;
       return {
         n: cnt,
-        sets: tags.map((tag) => ({ tag: tag, avg: (tagSum[tag] || 0) / (tagCnt[tag] || 1) })),
+        sets: tags.map(function(tag) {
+          const arr = hitSeries[tag] || [];
+          const m = mean(arr), sd = sdOf(arr);
+          // 关键校正：30 期滑动窗口使相邻预测高度重叠 → 命中序列自相关 → 朴素 se 低估、z 虚报。
+          // 用 lag-1 自相关 rho 折算有效样本量：n_eff = n(1-ρ)/(1+ρ)
+          let rho = 0;
+          if (arr.length > 10) { let c = 0, v2 = 0; for (let t = 1; t < arr.length; t++) c += (arr[t] - m) * (arr[t - 1] - m); for (let t = 0; t < arr.length; t++) v2 += (arr[t] - m) * (arr[t] - m); rho = v2 > 0 ? c / v2 : 0; }
+          const nEff = Math.max(2, Math.round(arr.length * (1 - rho) / (1 + rho)));
+          const se = sd / Math.sqrt(nEff || 1);
+          const z = se > 0 ? (m - expF) / se : 0;
+          const lo = m - 1.96 * se, hi = m + 1.96 * se;
+          return { tag: tag, avg: m, sd: sd, z: z, p: 2 * (1 - normCdf(Math.abs(z))), lo: lo, hi: hi, nEff: nEff, rho: rho };
+        }),
         best: bestSum / cnt, expF: expF, mainZ: zM, mainP: 2 * (1 - normCdf(Math.abs(zM))),
         formHit: formHit / cnt, formTol: formTol / cnt,
         rows: rows,
