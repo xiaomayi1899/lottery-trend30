@@ -349,6 +349,28 @@
     return h;
   }
 
+  function histCardHTML(g) {
+    const cfg = GAMES[g];
+    let cached = null;
+    try { const all = JSON.parse(localStorage.getItem("lt30_hist_v1") || "{}"); if (all[g]) cached = all[g]; } catch (e) {}
+    const lastIssue = store[g].list.length ? String(store[g].list[store[g].list.length - 1].issue) : "";
+    const fresh = cached && cached.upto === lastIssue;
+    const exF = cfg.type === "digits" ? cfg.pos / 10 : cfg.fk * cfg.draw / cfg.fn;
+    let h = '<div class="card"><div class="eyebrow">历史复盘 · 走前模拟（每期只用其之前 30 期）</div>';
+    if (fresh) {
+      const r = cached.r;
+      h += '<div class="hint mono">' + r.sets.map((s) => esc(s.tag) + " 场均命中 " + s.avg.toFixed(2)).join(" · ") + "</div>";
+      h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）</div>";
+      h += '<div class="hint mono">' + r.rows.map((row) => row.issue + "：" + row.cells.join("/")).join(" · ") + "</div>";
+      h += '<div class="hint" style="margin-top:8px">复盘命中贴近随机期望 = 正常且符合「开奖独立随机」；此表长期记录策略真实水位。</div>';
+    } else if (cached) {
+      h += '<div class="hint">上次复盘基于第 ' + esc(cached.upto) + ' 期数据，数据已更新，请重新运行。</div>';
+    }
+    h += '<div class="hint" id="' + g + '-hist-prog" style="min-height:14px"></div>' +
+      '<div class="btn-row"><button class="btn ghost" data-act="hist">运行历史复盘（近 60 期走前模拟）</button></div></div>';
+    return h;
+  }
+
   function calCardHTML(g) {
     const cfg = GAMES[g];
     if (cfg.type !== "pick") return '<div class="card"><div class="eyebrow">复盘修正 · 维度校准</div><div class="hint">数字型暂不支持维度校准，仅做存档核对。</div></div>';
@@ -454,6 +476,7 @@
     h += statsCardHTML(g);
     if (st.result) h += stepsHTML(g);
     h += calCardHTML(g);
+    h += histCardHTML(g);
     h += recoCardHTML(g);
     h += histHTML(g);
     el.innerHTML = h;
@@ -500,6 +523,22 @@
           const r = runCal(g);
           if (r) { renderGame(g); toast(GAMES[g].name + " 校准完成：样本 " + r.raw.n + " 期"); }
           else toast(GAMES[g].name + " 历史数据不足，无法校准");
+        }
+        else if (act === "hist") {
+          const b2 = t;
+          b2.disabled = true;
+          const prog = $("#" + g + "-hist-prog");
+          if (prog) prog.textContent = "历史复盘计算中：每期只用其之前 30 期跑完整合成流程（约数秒）…";
+          setTimeout(() => {
+            const r = Engine.historicalReview(g, 60);
+            b2.disabled = false;
+            if (!r) { if (prog) prog.textContent = "历史数据不足，无法复盘"; return; }
+            const all = JSON.parse(localStorage.getItem("lt30_hist_v1") || "{}");
+            all[g] = { upto: String(store[g].list[store[g].list.length - 1].issue), r: r };
+            localStorage.setItem("lt30_hist_v1", JSON.stringify(all));
+            renderGame(g);
+            toast(GAMES[g].name + " 历史复盘完成：" + r.n + " 期走前模拟");
+          }, 80);
         }
         return;
       }

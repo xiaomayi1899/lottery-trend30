@@ -57,6 +57,7 @@
         <p>数字型彩种（福彩3D）：各位<strong>一阶马尔可夫转移</strong>（上期该位数字 → 本期）+ 对数冷热 + 指数遗漏 + 012路亲和打分，和值带条件化，跨度/奇偶/大小形态马尔可夫预测（含组选形态统计）→ 约束合成直选推荐。</p>
         <p>防过拟合与诚实度：冷热偏差先过<strong>卡方均匀性检验</strong>（不显著则降权）；推荐号码经 <strong>30 次 Bootstrap 重采样</strong>稳定性筛选；内置<strong>走前回测</strong>（每期只用其之前 50 期预测、对照真实开奖，并列出随机基线）——回测命中率与随机基线相当，这正是「每期独立随机」应有的结果。</p>
         <p>推荐存档核对：每次点「开始分析」，五注推荐自动存入本机浏览器；下期开奖数据一到，自动回填每注命中情况（双色球/大乐透按号码个数＋后区，3D按直选命中位数），并列出随机期望命中数——长期看，存档命中率会贴近随机期望，这是开奖随机性最直观的个人验证。</p>
+        <p>走势轨迹读法：把近 30 期走势图当作一张图来读——<strong>斜连链</strong>（沿 ±1 斜线的移动号）、<strong>重号链</strong>（同号竖线）、<strong>和值斜率</strong>（连升/连降/震荡）、<strong>奇偶连势</strong>与<strong>区间迁移</strong>，轨迹活跃号以 0.15 权重纳入评分；另有<strong>历史复盘</strong>：对过去每期做走前模拟（只用其之前 30 期跑完整合成流程）逐期对照实开，命中与随机期望并列展示。</p>
         <p>这些维度本身没有预测力，价值在于把信息结构化、把概率看清楚。算法思路参考开源项目 <a href="https://github.com/zxz0119/lottery-ai-simulator" target="_blank" rel="noopener">lottery-ai-simulator（热号/冷号/遗漏/统计特征生成候选）</a>、<a href="https://github.com/snjyor/lucky_ball" target="_blank" rel="noopener">lucky_ball（历史数据分析）</a>、<a href="https://github.com/wjt0321/lottery-predictor" target="_blank" rel="noopener">lottery-predictor（马尔可夫链 + 共现频率 + 同尾形态）</a> 与 <a href="https://github.com/Callam7/LottoPipeline" target="_blank" rel="noopener">LottoPipeline（Monte Carlo 模拟管线）</a> 等，全部在本页本地计算，无第三方运行时依赖、不上传任何数据。</p>
       </div>
     </div>

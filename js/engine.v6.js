@@ -101,6 +101,56 @@
     return C;
   }
 
+  /* ---------- 走势轨迹（走势图读法）：斜连链 / 重号链 / 和值斜率 / 奇偶连势 / 区间迁移 ---------- */
+  function buildTrends(cfg, draws) {
+    const D = draws.length;
+    const fSets = draws.map((d) => new Set(d.nums.slice(0, cfg.draw)));
+    const nZones = cfg.zone4 ? 4 : 3;
+    const zEdge = cfg.zone4 ? [20, 40, 60] : cfg.zones;
+    const zoneOf = (x) => { for (let z = 0; z < nZones; z++) if (x <= (z === nZones - 1 ? cfg.fn : zEdge[z])) return z; return nZones - 1; };
+    // 1) 斜连链：同一「移动号」沿 ±1 逐期出现（走势图斜线），只保留最近 2 期内仍活跃的链
+    const diagLive = [];
+    for (const dir of [1, -1]) {
+      let prev = {};
+      for (let t = 0; t < D; t++) {
+        const cur = {};
+        for (const x of fSets[t]) {
+          cur[x] = (t > 0 && prev[x - dir]) ? prev[x - dir] + 1 : 1;
+          if (cur[x] >= 2 && t >= D - 2) diagLive.push({ dir: dir, tail: x, len: cur[x] });
+        }
+        prev = cur;
+      }
+    }
+    diagLive.sort((a, b) => b.len - a.len);
+    // 2) 重号链：当前连续出现的同号（竖线）
+    const chain = [];
+    for (let n = 1; n <= cfg.fn; n++) {
+      let len = 0;
+      for (let t = D - 1; t >= 0; t--) { if (fSets[t].has(n)) len++; else break; }
+      if (len >= 2) chain.push({ n: n, len: len });
+    }
+    chain.sort((a, b) => b.len - a.len);
+    // 3) 和值斜率（近 10 期最小二乘）与窗口均值
+    const sums = draws.map((d) => d.nums.slice(0, cfg.draw).reduce((a, b) => a + b, 0));
+    const rec = sums.slice(-10);
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (let i = 0; i < rec.length; i++) { sx += i; sy += rec[i]; sxx += i * i; sxy += i * rec[i]; }
+    const slope = (rec.length * sxy - sx * sy) / ((rec.length * sxx - sx * sx) || 1);
+    // 4) 奇偶连势：奇数个数序列的连续升/降步数
+    const oddSeq = draws.map((d) => d.nums.slice(0, cfg.draw).filter((x) => x % 2 === 1).length);
+    let oddStreak = 0, oddDir = 0;
+    for (let t = D - 1; t > 0; t--) { const d2 = oddSeq[t] - oddSeq[t - 1]; if (d2 === 0) break; const sgn = d2 > 0 ? 1 : -1; if (oddDir === 0) oddDir = sgn; else if (sgn !== oddDir) break; oddStreak++; }
+    // 5) 区间迁移：前半窗口 vs 后半窗口场均个数
+    const h1 = Math.floor(D / 2);
+    const zoneMig = [];
+    for (let z = 0; z < nZones; z++) {
+      let a = 0, b = 0;
+      draws.forEach((d, t) => { const c = d.nums.slice(0, cfg.draw).filter((x) => zoneOf(x) === z).length; if (t < h1) a += c; else b += c; });
+      zoneMig.push({ a: a / Math.max(1, h1), b: b / Math.max(1, D - h1) });
+    }
+    return { diagLive: diagLive, chain: chain, slope: slope, oddStreak: oddStreak, oddDir: oddDir, zoneMig: zoneMig, sums: sums };
+  }
+
   /* ---------- 选号型：通用统计 ---------- */
   function buildPickStats(cfg, draws) {
     const D = draws.length;
@@ -250,6 +300,16 @@
       }
       for (let i = 1; i <= cfg.fn; i++) coB[i] /= cMax;
     }
+    // 走势轨迹分：活跃斜连链的延伸号 + 重号链号（归一化后纳入主评分）
+    const tr = buildTrends(cfg, draws);
+    const trendN = new Array(cfg.fn + 1).fill(0);
+    {
+      let tMax = 1e-9;
+      for (const c of tr.diagLive) { const e = c.tail + c.dir; if (e >= 1 && e <= cfg.fn) trendN[e] += c.len >= 3 ? 1 : 0.6; }
+      for (const c of tr.chain) trendN[c.n] += 0.8 * (c.len >= 3 ? 1 : 0.5);
+      for (let i = 1; i <= cfg.fn; i++) if (trendN[i] > tMax) tMax = trendN[i];
+      for (let i = 1; i <= cfg.fn; i++) trendN[i] /= tMax;
+    }
     // 形态预测：一阶马尔可夫转移（条件于上期形态）× ratio，回退窗口分布
     const odd = clampI(markovPredict(ts.oddSeq, 0, cfg.draw) * ratio, 0, cfg.fk);
     const prime = clampI(markovPredict(ts.primeSeq, 0, cfg.draw) * ratio, 0, cfg.fk);
@@ -321,7 +381,18 @@
         "⚠ 冷热与遗漏无预测力",
       ], cand: null, why: "形态维度：冷热/遗漏" });
     }
-    out.sections.push({ title: "第七节 · 统计显著性检验（卡方均匀性）", lines: [
+    {
+      const migLine = tr.zoneMig.map((z, i) => cfg.zoneNames[i] + " " + z.a.toFixed(1) + "→" + z.b.toFixed(1)).join(" · ");
+      out.sections.push({ title: "第七节 · 走势轨迹（走势图读法）", lines: [
+        "斜连链（沿 ±1 斜线）：活跃 " + tr.diagLive.length + " 条" + (tr.diagLive.length ? " → " + tr.diagLive.slice(0, 4).map((c) => pad2(c.tail) + " 已连 " + c.len + " 期(下看 " + pad2(c.tail + c.dir) + ")").join("、") : ""),
+        "重号链（同号竖线）：活跃 " + tr.chain.length + " 条" + (tr.chain.length ? " → " + tr.chain.slice(0, 4).map((c) => pad2(c.n) + " 连开 " + c.len + " 期").join("、") : ""),
+        "和值轨迹：近 10 期斜率 " + (tr.slope >= 0 ? "+" : "") + tr.slope.toFixed(1) + "/期" + (tr.slope > 1.5 ? "（连升）" : tr.slope < -1.5 ? "（连降）" : "（震荡）") + " · 窗口均值 " + mean(tr.sums).toFixed(1),
+        "奇偶连势：奇数个数" + (tr.oddStreak >= 2 ? (tr.oddDir > 0 ? "连续上升 " + tr.oddStreak + " 步 → 回归提示偏偶" : "连续下降 " + tr.oddStreak + " 步 → 回归提示偏奇") : "无连续升/降"),
+        "区间迁移（前半 → 后半 场均）：" + migLine,
+        "轨迹活跃号已以 0.15 权重纳入主评分；⚠ 走势轨迹是走势图读法之一，不构成预测优势",
+      ], cand: null, why: "走势维度：斜连/重号链/斜率/连势/迁移" });
+    }
+    out.sections.push({ title: "第八节 · 统计显著性检验（卡方均匀性）", lines: [
       "近 " + ts.D + " 期各号出现频次 vs 均匀期望：χ²=" + chi.chi2.toFixed(1) + "（df=" + chi.df + "），p=" + chi.p.toFixed(3),
       chi.p < 0.05 ? "p<0.05：与均匀分布有显著差异 → 冷热/走势模式权重上调（trust=" + trust + "）" : "p≥0.05：与均匀分布无显著差异 → 偏差按噪声降权（trust=" + trust + "），防止把噪声当规律",
       "主推经 30 次 Bootstrap 重采样稳定性筛选；评分含共现频率（与上期号码历史同现率）与同尾号约束",
@@ -341,7 +412,7 @@
         const rep = (form.repeat >= 1 ? (ts.prevF.has(i) ? 1 : -0.15) : (ts.prevF.has(i) ? -0.4 : 0)) * trust;
         const nb = ((ts.prevF.has(i - 1) || ts.prevF.has(i + 1)) ? (form.neighbor >= 1 ? 1 : -0.2) : 0) * trust;
         const w = getW(key), wSum = w.hot + w.due + w.co;
-        sMain[i] = (w.hot * sFreq + w.due * sDueI + w.co * coB[i]) / wSum + 0.10 * rep + 0.10 * nb;
+        sMain[i] = (w.hot * sFreq + w.due * sDueI + w.co * coB[i]) / wSum + 0.15 * trendN[i] + 0.10 * rep + 0.10 * nb;
         sHot[i] = sFreq; sDue[i] = sDueI; sBal[i] = 0.5 * sFreq + 0.5 * sDueI;
       }
       return [sMain, sHot, sDue, sBal];
@@ -402,7 +473,7 @@
       seen.add(k2);
     }
 
-    out.sections.push({ title: "第八节 · 形态合成推荐", lines: [
+    out.sections.push({ title: "第九节 · 形态合成推荐", lines: [
       "预测形态：奇偶 " + form.odd + ":" + (cfg.fk - form.odd) + " · 质合 " + form.prime + ":" + (cfg.fk - form.prime) +
         " · 大小 " + form.low + ":" + (cfg.fk - form.low) + " · 区间 " + zoneCounts.join(":") + " · 和值 " + sum[0] + "–" + sum[1],
       "预测方法：一阶马尔可夫转移（上期形态→下期）混合窗口分布；和值带条件化估计；EWMA 近期加权 + 共现频率 + 同尾约束",
@@ -435,13 +506,13 @@
       }
       return { n: n2, oHit: oHit / n2, oHit1: oHit1 / n2, oB0: oB0 / n2, oB1: oB1 / n2, sHit: sHit / n2, sCov: sCov / n2 };
     })();
-    out.sections.push(bt ? { title: "第九节 · 模型回测（走前检验 · 诚实度）", lines: [
+    out.sections.push(bt ? { title: "第十节 · 模型回测（走前检验 · 诚实度）", lines: [
       "最近 " + bt.n + " 期逐期回测：每期只用其之前的 30 期预测，再对照真实开奖",
       "奇偶形态命中：精确 " + Math.round(bt.oHit * 100) + "%（随机基线 " + Math.round(bt.oB0 * 100) + "%）· ±1 容差 " + Math.round(bt.oHit1 * 100) + "%（基线 " + Math.round(bt.oB1 * 100) + "%）",
       "和值带覆盖：真实和值入带 " + Math.round(bt.sHit * 100) + "%，同一带宽对历史和值的平均覆盖 " + Math.round(bt.sCov * 100) + "%（基线）",
       "结论：命中率与随机基线接近（差异在 150 期抽样的波动范围内）→ 没有可靠预测力，符合「每期独立随机」；回测用于验证模型诚实度",
       "⚠ 回测命中率≈基线是正常且预期的结果，请以此理解所有推荐的本质",
-    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第九节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
+    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第十节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
     out.ms = Date.now() - t0;
     out.gd = { fc: ts.fc, fom: ts.fom, window: ts.D };
     return out;
@@ -475,6 +546,21 @@
         if (u === 1) zu.bz++; else if (u === 2) zu.zs++; else zu.zl++; });
     }
     return { D, freq, fom, sums, spans, oddDist, bigDist, roadDist, oddSeq, bigSeq, roadSeq, zu };
+  }
+
+  /* 各位走势轨迹：平开连次 / 连升连降步数 / 近 5 期轨迹串 */
+  function buildDigitTrends(cfg, draws) {
+    const P = cfg.pos, D = draws.length;
+    const out = [];
+    for (let p = 0; p < P; p++) {
+      const s = draws.map((d) => d.nums[p]);
+      let rep = 0;
+      for (let t = D - 1; t > 0; t--) { if (s[t] === s[t - 1]) rep++; else break; }
+      let dir = 0, dst = 0;
+      for (let t = D - 1; t > 0; t--) { const d2 = s[t] - s[t - 1]; if (d2 === 0) break; const g = d2 > 0 ? 1 : -1; if (dir === 0) dir = g; else if (g !== dir) break; dst++; }
+      out.push({ p: p, last: s[D - 1], rep: rep, dir: dir, dst: dst, seq: s.slice(-5) });
+    }
+    return out;
   }
 
   function analyzeDigits(key) {
@@ -536,7 +622,13 @@
       L.push("⚠ 各位冷热无预测力");
       out.sections.push({ title: "第五节 · 各位冷热与遗漏（近 30 期）", lines: L, cand: null, why: "形态维度：各位冷热" });
     }
-    out.sections.push({ title: "第六节 · 统计显著性检验（卡方均匀性）", lines: [
+    {
+      const trd = buildDigitTrends(cfg, draws);
+      const L = trd.map((t) => cfg.posNames[t.p] + "：近 5 期 " + t.seq.join("→") + (t.rep >= 1 ? " · 平开 " + t.rep + " 期" : "") + (t.dst >= 2 ? " · " + (t.dir > 0 ? "连升" : "连降") + t.dst + " 步" : ""));
+      L.push("⚠ 各位轨迹是走势图读法之一，无预测优势");
+      out.sections.push({ title: "第六节 · 各位走势轨迹（走势图读法）", lines: L, cand: null, why: "走势维度：各位轨迹" });
+    }
+    out.sections.push({ title: "第七节 · 统计显著性检验（卡方均匀性）", lines: [
       "近 " + ts.D + " 期 × " + cfg.pos + " 位共 " + chiCells.length + " 个（位,数字）频次 vs 均匀期望：χ²=" + chi.chi2.toFixed(1) + "（df=" + chi.df + "），p=" + chi.p.toFixed(3),
       chi.p < 0.05 ? "p<0.05：与均匀有显著差异 → 转移/冷热权重上调（trust=" + trust + "）" : "p≥0.05：与均匀无显著差异 → 偏差按噪声降权（trust=" + trust + "）",
       "各位评分经 30 次 Bootstrap 重采样稳定性筛选（同位反复选中的数字更稳）",
@@ -627,7 +719,7 @@
       while (seen.has(k2) && guard < 8) { guard++; s.f = randDigits(); k2 = s.f.join(""); }
       seen.add(k2);
     }
-    out.sections.push({ title: "第七节 · 形态合成推荐", lines: [
+    out.sections.push({ title: "第八节 · 形态合成推荐", lines: [
       "预测形态：和值 " + sumBand[0] + "–" + sumBand[1] + "（条件化）· " + oddMode + " 奇" + (cfg.pos - oddMode) + "偶 · " + bigMode + " 大" + (cfg.pos - bigMode) + "小 · 跨度 " + spanMode + (ts.zu ? " · 组六为主" : ""),
       "评分构成：各位一阶马尔可夫转移（上期数字→本期）+ 对数冷热 + 指数遗漏 + 012路亲和 + Bootstrap 稳定性",
       "合成方法：各位在「综合 / 热号 / 回补 / 均衡」四种评分下取最优数字，满足和值带约束；直选允许各位重号",
@@ -656,13 +748,13 @@
       }
       return { n: n2, oHit: oHit / n2, oHit1: oHit1 / n2, oB0: oB0 / n2, oB1: oB1 / n2, sHit: sHit / n2, sCov: sCov / n2 };
     })();
-    out.sections.push(bt ? { title: "第八节 · 模型回测（走前检验 · 诚实度）", lines: [
+    out.sections.push(bt ? { title: "第九节 · 模型回测（走前检验 · 诚实度）", lines: [
       "最近 " + bt.n + " 期逐期回测：每期只用其之前的 30 期预测，再对照真实开奖",
       "奇数个数形态命中：精确 " + Math.round(bt.oHit * 100) + "%（随机基线 " + Math.round(bt.oB0 * 100) + "%）· ±1 容差 " + Math.round(bt.oHit1 * 100) + "%（基线 " + Math.round(bt.oB1 * 100) + "%）",
       "和值带覆盖：真实和值入带 " + Math.round(bt.sHit * 100) + "%，同一带宽对历史和值的平均覆盖 " + Math.round(bt.sCov * 100) + "%（基线）",
       "结论：命中率与随机基线接近（差异在 150 期抽样的波动范围内）→ 没有可靠预测力，符合「每期独立随机」",
       "⚠ 回测命中率≈基线是正常且预期的结果，请以此理解所有推荐的本质",
-    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第八节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
+    ], cand: null, why: "走前回测（walk-forward）" } : { title: "第九节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
     out.ms = Date.now() - t0;
     out.digitStats = ts;
     return out;
@@ -698,13 +790,60 @@
     return { raw: raw, w: w };
   }
 
+  /* ---------- 历史复盘：走前模拟整条合成流水线（与线上完全同参），逐期对照实开 ---------- */
+  function historicalReview(key, n) {
+    const cfg = GAMES[key];
+    const all = DATA[key];
+    if (!all || all.length < WINDOW + 10) return null;
+    const M = Math.min(n || 60, all.length - WINDOW);
+    if (M < 5) return null;
+    const full = all;
+    const rows = [];
+    const tagSum = {}, tagCnt = {};
+    let tags = null;
+    let formHit = 0, formTol = 0, cnt = 0;
+    try {
+      for (let i = full.length - M; i < full.length; i++) {
+        DATA[key] = full.slice(0, i);
+        const r = analyzeGame(key);
+        const act = full[i];
+        const front = act.nums.slice(0, cfg.draw);
+        const back = cfg.bk ? act.nums.slice(cfg.draw) : null;
+        const cells = [];
+        if (!tags) tags = r.sets.filter((s) => s.tag.indexOf("随机") < 0).map((s) => s.tag);
+        r.sets.forEach((s) => {
+          if (s.tag.indexOf("随机") >= 0) return;
+          let v;
+          if (cfg.type === "digits") { let p = 0; for (let q = 0; q < cfg.pos; q++) if (s.f[q] === act.nums[q]) p++; v = p; }
+          else { v = s.f.filter((x) => front.indexOf(x) >= 0).length; }
+          cells.push(v);
+          tagSum[s.tag] = (tagSum[s.tag] || 0) + v; tagCnt[s.tag] = (tagCnt[s.tag] || 0) + 1;
+        });
+        const af = act.nums.slice(0, cfg.draw);
+        const actO = af.filter((x) => x % 2 === 1).length;
+        const predO = parseInt(String(r.form.odd), 10);
+        if (predO === actO) formHit++;
+        if (Math.abs(predO - actO) <= 1) formTol++;
+        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), cells: cells });
+        cnt++;
+      }
+    } finally { DATA[key] = full; }
+    if (!cnt || !tags) return null;
+    return {
+      n: cnt,
+      sets: tags.map((tag) => ({ tag: tag, avg: (tagSum[tag] || 0) / (tagCnt[tag] || 1) })),
+      formHit: formHit / cnt, formTol: formTol / cnt,
+      rows: rows.slice(-12),
+    };
+  }
+
   function analyzeGame(key) {
     const cfg = GAMES[key];
     if (!cfg) throw new Error("未知彩种");
     return cfg.type === "digits" ? analyzeDigits(key) : analyzePick(key);
   }
 
-  global.Engine = { GAMES, WINDOW, analyzeGame, calibrate, weights, setWeights, pad2, fmtArr, fmtS, pct: (x, nd) => (x * 100).toFixed(nd === undefined ? 1 : nd) + "%" };
+  global.Engine = { GAMES, WINDOW, analyzeGame, calibrate, weights, setWeights, historicalReview, pad2, fmtArr, fmtS, pct: (x, nd) => (x * 100).toFixed(nd === undefined ? 1 : nd) + "%" };
   Object.defineProperty(global, "DATA", {
     get() { return DATA; },
     set(v) { DATA = v; },
