@@ -1,7 +1,9 @@
-name: 姣忔棩寮€濂栨暟鎹洿鏂?
+name: 每日开奖数据更新
+
 on:
   schedule:
-    # 鍖椾含鏃堕棿 21:40 / 22:10锛岃鐩栧弻鑹茬悆锛堜簩/鍥?鏃?21:15锛変笌澶т箰閫忥紙涓€/涓?鍏?21:25锛夊紑濂?    - cron: "40 13 * * *"
+    # 北京时间 21:40 / 22:10，覆盖双色球（二/四/日 21:15）与大乐透（一/三/六 21:25）开奖
+    - cron: "40 13 * * *"
     - cron: "10 14 * * *"
   workflow_dispatch: {}
 
@@ -16,10 +18,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: 鎶撳彇鏈€鏂版暟鎹?        run: python update_data.py
-      - name: 鎻愪氦鍙樻洿
+      - name: 抓取最新数据
+        run: python update_data.py
+      - name: 提交变更
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A data
-          git diff --cached --quiet || (git commit -m "寮€濂栨暟鎹洿鏂?$(date -u +%F)" && git push)
+          git diff --cached --quiet || (git commit -m "开奖数据更新 $(date -u +%F)" && git push)
