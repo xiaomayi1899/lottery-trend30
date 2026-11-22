@@ -472,6 +472,29 @@
       }
       seen.add(k2);
     }
+    // 低重叠优化：均衡注与前三注重叠过高时，换入次优不重叠号（提升 best-of-4 的下界；期望不变）
+    (function() {
+      const bal = out.sets.find(function(s) { return s.tag.indexOf("均衡") >= 0; });
+      if (!bal) return;
+      const others = out.sets.filter(function(s) { return s !== bal && s.tag.indexOf("随机") < 0; });
+      const rank = [];
+      for (let i = 1; i <= cfg.fn; i++) rank.push(i);
+      rank.sort(function(a, b) { return sBal[b] - sBal[a]; });
+      const overlapCnt = function(set) { return others.reduce(function(mx, o) { return Math.max(mx, o.f.filter(function(x) { return set.f.indexOf(x) >= 0; }).length); }, 0); };
+      let guard = 0;
+      while (overlapCnt(bal) > 2 && guard < 6) {
+        guard++;
+        let victim = null, victimScore = 1e9;
+        for (const x of bal.f) {
+          const c = others.filter(function(o) { return o.f.indexOf(x) >= 0; }).length;
+          if (c >= 2 && sBal[x] < victimScore) { victimScore = sBal[x]; victim = x; }
+        }
+        if (victim == null) break;
+        const rep = rank.find(function(y) { return bal.f.indexOf(y) < 0 && others.every(function(o) { return o.f.indexOf(y) < 0; }); });
+        if (rep == null) break;
+        bal.f = bal.f.map(function(x) { return x === victim ? rep : x; }).sort(function(a, b) { return a - b; });
+      }
+    })();
 
     out.sections.push({ title: "第九节 · 形态合成推荐", lines: [
       "预测形态：奇偶 " + form.odd + ":" + (cfg.fk - form.odd) + " · 质合 " + form.prime + ":" + (cfg.fk - form.prime) +
@@ -513,6 +536,21 @@
       "结论：命中率与随机基线接近（差异在 150 期抽样的波动范围内）→ 没有可靠预测力，符合「每期独立随机」；回测用于验证模型诚实度",
       "⚠ 回测命中率≈基线是正常且预期的结果，请以此理解所有推荐的本质",
     ], cand: null, why: "走前回测（walk-forward）" } : { title: "第十节 · 模型回测", lines: ["历史数据不足 61 期，暂无法回测"], cand: null, why: "走前回测" });
+    {
+      const rel = relationLab(key);
+      if (rel) {
+        const L = [];
+        L.push("滞后共现 lift 检验：全历史 " + rel.tests + " 对（lag 1-3，Bonferroni 校正 α=" + rel.alpha.toExponential(1) + "）");
+        L.push("|z| 最大的 3 对：" + rel.pairsTop.map(function(p) { return pad2(p.j) + "→" + pad2(p.i) + "(lag" + p.lag + ",lift " + p.lift.toFixed(2) + ",p=" + p.p.toExponential(1) + (p.sig ? "★显著" : "") + ")"; }).join(" · "));
+        L.push("和值自相关：lag1 r=" + rel.acf.sum[0].r.toFixed(3) + "(p=" + rel.acf.sum[0].p.toFixed(3) + ") · lag2 r=" + rel.acf.sum[1].r.toFixed(3) + " · lag3 r=" + rel.acf.sum[2].r.toFixed(3));
+        L.push("奇数个数自相关：lag1 r=" + rel.acf.odd[0].r.toFixed(3) + "(p=" + rel.acf.odd[0].p.toFixed(3) + ")");
+        L.push("游程检验（奇占优/偶占优序列）：z=" + rel.runs.z.toFixed(2) + ",p=" + rel.runs.p.toFixed(3));
+        const anySig = rel.pairsTop.some(function(p) { return p.sig; }) || rel.acf.sum[0].p < rel.alpha || rel.runs.p < rel.alpha;
+        L.push(anySig ? "结论：存在个别统计显著关系 → 已按校准机制纳入权重（仍需更多数据验证）" : "结论：未发现任何通过显著性检验的可利用关系 → 这是独立随机的直接证据");
+        L.push("⚠ 显著性检验用全历史（检验性质，不受 30 期窗口限制）；结论如实展示，无论是否显著都不改变中奖概率");
+        out.sections.push({ title: "第十一节 · 关系研究（滞后/自相关/游程全历史检验）", lines: L, cand: null, why: "研究维度：滞后lift/自相关/游程" });
+      }
+    }
     out.ms = Date.now() - t0;
     out.gd = { fc: ts.fc, fom: ts.fom, window: ts.D };
     return out;
@@ -790,53 +828,138 @@
     return { raw: raw, w: w };
   }
 
-  /* ---------- 历史复盘：走前模拟整条合成流水线（与线上完全同参），逐期对照实开 ---------- */
-  function historicalReview(key, n) {
+  /* ---------- 历史复盘：走前模拟整条合成流水线（与线上完全同参），逐期对照实开；分批异步防卡 UI ---------- */
+  function historicalReview(key, n, onProg, onDone) {
     const cfg = GAMES[key];
     const all = DATA[key];
-    if (!all || all.length < WINDOW + 10) return null;
+    const fail = function() { if (onDone) { onDone(null); return null; } return null; };
+    if (!all || all.length < WINDOW + 10) return fail();
     const M = Math.min(n || 60, all.length - WINDOW);
-    if (M < 5) return null;
+    if (M < 5) return fail();
     const full = all;
     const rows = [];
     const tagSum = {}, tagCnt = {};
     let tags = null;
     let formHit = 0, formTol = 0, cnt = 0;
-    try {
-      for (let i = full.length - M; i < full.length; i++) {
-        DATA[key] = full.slice(0, i);
-        const r = analyzeGame(key);
-        const act = full[i];
-        const front = act.nums.slice(0, cfg.draw);
-        const back = cfg.bk ? act.nums.slice(cfg.draw) : null;
-        const cells = [];
-        const setsOut = [];
-        if (!tags) tags = r.sets.filter((s) => s.tag.indexOf("随机") < 0).map((s) => s.tag);
-        r.sets.forEach((s) => {
-          if (s.tag.indexOf("随机") >= 0) return;
-          let v;
-          if (cfg.type === "digits") { let p = 0; for (let q = 0; q < cfg.pos; q++) if (s.f[q] === act.nums[q]) p++; v = p; }
-          else { v = s.f.filter((x) => front.indexOf(x) >= 0).length; }
-          cells.push(v);
-          tagSum[s.tag] = (tagSum[s.tag] || 0) + v; tagCnt[s.tag] = (tagCnt[s.tag] || 0) + 1;
-          setsOut.push({ tag: s.tag, f: s.f.slice(), b: s.b ? s.b.slice() : null });
-        });
-        const af = act.nums.slice(0, cfg.draw);
-        const actO = af.filter((x) => x % 2 === 1).length;
-        const predO = parseInt(String(r.form.odd), 10);
-        if (predO === actO) formHit++;
-        if (Math.abs(predO - actO) <= 1) formTol++;
-        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), basedOn: String(full[i - 1].issue), cells: cells, sets: setsOut, actual: act.nums.slice() });
-        cnt++;
-      }
-    } finally { DATA[key] = full; }
-    if (!cnt || !tags) return null;
-    return {
-      n: cnt,
-      sets: tags.map((tag) => ({ tag: tag, avg: (tagSum[tag] || 0) / (tagCnt[tag] || 1) })),
-      formHit: formHit / cnt, formTol: formTol / cnt,
-      rows: rows,
+    let bestSum = 0;
+    const mainHits = [];
+    const st = { i: full.length - M };
+    const oneRow = function(i) {
+      DATA[key] = full.slice(0, i);
+      const r = analyzeGame(key);
+      const act = full[i];
+      const front = act.nums.slice(0, cfg.draw);
+      const back = cfg.bk ? act.nums.slice(cfg.draw) : null;
+      const cells = [];
+      const setsOut = [];
+      let best = 0;
+      if (!tags) tags = r.sets.filter((s) => s.tag.indexOf("随机") < 0).map((s) => s.tag);
+      r.sets.forEach((s) => {
+        if (s.tag.indexOf("随机") >= 0) return;
+        let v;
+        if (cfg.type === "digits") { let p = 0; for (let q = 0; q < cfg.pos; q++) if (s.f[q] === act.nums[q]) p++; v = p; }
+        else { v = s.f.filter((x) => front.indexOf(x) >= 0).length; }
+        cells.push(v);
+        if (v > best) best = v;
+        tagSum[s.tag] = (tagSum[s.tag] || 0) + v; tagCnt[s.tag] = (tagCnt[s.tag] || 0) + 1;
+        setsOut.push({ tag: s.tag, f: s.f.slice(), b: s.b ? s.b.slice() : null });
+      });
+      bestSum += best;
+      const af = act.nums.slice(0, cfg.draw);
+      const actO = af.filter((x) => x % 2 === 1).length;
+      const predO = parseInt(String(r.form.odd), 10);
+      if (predO === actO) formHit++;
+      if (Math.abs(predO - actO) <= 1) formTol++;
+      if (tags && tags.length) mainHits.push(cells[0] || 0);
+      rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), basedOn: String(full[i - 1].issue), cells: cells, sets: setsOut, actual: act.nums.slice() });
+      cnt++;
     };
+    const build = function() {
+      DATA[key] = full;
+      if (!cnt || !tags) return null;
+      const expF = cfg.type === "digits" ? cfg.pos / 10 : cfg.fk * cfg.draw / cfg.fn;
+      const sdM = sdOf(mainHits);
+      const zM = (sdM > 0 && cnt > 1) ? ((mean(mainHits) - expF) * Math.sqrt(cnt) / sdM) : 0;
+      return {
+        n: cnt,
+        sets: tags.map((tag) => ({ tag: tag, avg: (tagSum[tag] || 0) / (tagCnt[tag] || 1) })),
+        best: bestSum / cnt, expF: expF, mainZ: zM, mainP: 2 * (1 - normCdf(Math.abs(zM))),
+        formHit: formHit / cnt, formTol: formTol / cnt,
+        rows: rows,
+      };
+    };
+    if (!onDone) {
+      for (let i = full.length - M; i < full.length; i++) oneRow(i);
+      return build();
+    }
+    const step = function() {
+      const end = Math.min(full.length, st.i + 10);
+      try { for (; st.i < end; st.i++) oneRow(st.i); } finally { DATA[key] = full; }
+      if (onProg) onProg(Math.round((st.i - (full.length - M)) / M * 100));
+      if (st.i < full.length) { setTimeout(step, 0); return; }
+      onDone(build());
+    };
+    setTimeout(step, 0);
+    return null;
+  }
+
+  /* ---------- 关系研究：全历史滞后共现 lift / 形态自相关 / 游程检验（带多重检验校正） ---------- */
+  function relationLab(key) {
+    const cfg = GAMES[key];
+    const all = DATA[key];
+    if (!all || all.length < 200) return null;
+    const fSets = all.map((d) => new Set(d.nums.slice(0, cfg.draw)));
+    const N = fSets.length;
+    const pI = new Array(cfg.fn + 1).fill(0);
+    fSets.forEach(function(s) { for (const x of s) pI[x]++; });
+    for (let i = 1; i <= cfg.fn; i++) pI[i] /= N;
+    const pairs = [];
+    for (const lag of [1, 2, 3]) {
+      const cnt = [];
+      for (let i = 0; i <= cfg.fn; i++) cnt.push(new Array(cfg.fn + 1).fill(0));
+      const cntJ = new Array(cfg.fn + 1).fill(0);
+      for (let t = lag; t < N; t++) {
+        for (const j of fSets[t - lag]) { cntJ[j]++; for (const i of fSets[t]) cnt[j][i]++; }
+      }
+      for (let j = 1; j <= cfg.fn; j++) {
+        if (cntJ[j] < 30) continue;
+        for (let i = 1; i <= cfg.fn; i++) {
+          if (i === j || pI[i] <= 0 || pI[i] >= 1) continue;
+          const obs = cnt[j][i] / cntJ[j];
+          const z = (obs - pI[i]) / Math.sqrt(pI[i] * (1 - pI[i]) / cntJ[j]);
+          pairs.push({ lag: lag, j: j, i: i, lift: obs / pI[i], z: z, n: cntJ[j] });
+        }
+      }
+    }
+    pairs.sort(function(a, b) { return Math.abs(b.z) - Math.abs(a.z); });
+    const alpha = 0.05 / (pairs.length || 1);
+    const top = pairs.slice(0, 3).map(function(p) { const c = Object.assign({}, p); c.p = 2 * (1 - normCdf(Math.abs(p.z))); c.sig = c.p < alpha; return c; });
+    const series = {
+      sum: all.map(function(d) { return d.nums.slice(0, cfg.draw).reduce(function(a, b) { return a + b; }, 0); }),
+      odd: all.map(function(d) { return d.nums.slice(0, cfg.draw).filter(function(x) { return x % 2 === 1; }).length; }),
+    };
+    const acf = {};
+    for (const k of Object.keys(series)) {
+      const s = series[k];
+      const mu = mean(s), sd = sdOf(s);
+      const row = [];
+      for (const lag of [1, 2, 3]) {
+        let c = 0;
+        for (let t = lag; t < s.length; t++) c += (s[t] - mu) * (s[t - lag] - mu);
+        const r2 = c / ((s.length - lag) * sd * sd || 1);
+        const tt = r2 * Math.sqrt(s.length - lag) / Math.sqrt(1 - r2 * r2 || 1);
+        row.push({ lag: lag, r: r2, p: 2 * (1 - normCdf(Math.abs(tt))) });
+      }
+      acf[k] = row;
+    }
+    const bin = series.odd.map(function(v) { return v > cfg.fk / 2 ? 1 : 0; });
+    const n1 = bin.reduce(function(a, b) { return a + b; }, 0), n0 = bin.length - n1;
+    let runs = 1;
+    for (let t = 1; t < bin.length; t++) if (bin[t] !== bin[t - 1]) runs++;
+    const muR = bin.length > 0 ? (2 * n1 * n0 / bin.length + 1) : 0;
+    const vaR = (2 * n1 * n0 * (2 * n1 * n0 - bin.length)) / (bin.length * bin.length * (bin.length - 1) || 1);
+    const zR = vaR > 0 ? (runs - muR) / Math.sqrt(vaR) : 0;
+    return { pairsTop: top, tests: pairs.length, alpha: alpha, acf: acf, runs: { runs: runs, z: zR, p: 2 * (1 - normCdf(Math.abs(zR))), n1: n1, n0: n0 } };
   }
 
   function analyzeGame(key) {

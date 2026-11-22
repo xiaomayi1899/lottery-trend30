@@ -360,6 +360,7 @@
     if (fresh) {
       const r = cached.r;
       h += '<div class="hint mono">' + r.sets.map((s) => esc(s.tag) + " 场均命中 " + s.avg.toFixed(2)).join(" · ") + "</div>";
+      h += '<div class="hint">最佳注（四注里最好的一注）场均命中 <strong>' + (r.best === undefined ? "-" : r.best.toFixed(2)) + "</strong> 个 · 主推显著性 z=" + (r.mainZ === undefined ? "-" : r.mainZ.toFixed(2)) + "（p=" + (r.mainP === undefined ? "-" : (r.mainP || 0).toFixed(3)) + "，p>0.05 = 与随机无显著差异）</div>";
       h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）· 共 " + r.rows.length + " 期走前模拟。每一行的含义：用<strong>该期之前</strong>的开奖数据为该期做预测，再对照该期实开——绝不用开奖后的数据装预测。</div>";
       const rev = (nums, marks, blue) => {
         let s2 = "";
@@ -392,7 +393,7 @@
       h += '<div class="hint">上次复盘基于第 ' + esc(cached.upto) + ' 期数据，数据已更新，请重新运行。</div>';
     }
     h += '<div class="hint" id="' + g + '-hist-prog" style="min-height:14px"></div>' +
-      '<div class="btn-row"><button class="btn ghost" data-act="hist">运行历史复盘（近 60 期走前模拟）</button></div></div>';
+      '<div class="btn-row"><button class="btn ghost" data-act="hist">运行历史复盘（最多 300 期走前模拟）</button></div></div>';
     return h;
   }
 
@@ -553,9 +554,9 @@
           const b2 = t;
           b2.disabled = true;
           const prog = $("#" + g + "-hist-prog");
-          if (prog) prog.textContent = "历史复盘计算中：每期只用其之前 30 期跑完整合成流程（约数秒）…";
-          setTimeout(() => {
-            const r = Engine.historicalReview(g, 60);
+          const nRev = g === "kl8" ? 100 : 300;
+          if (prog) prog.textContent = "历史复盘计算中：0%（走前模拟 " + nRev + " 期）";
+          Engine.historicalReview(g, nRev, function(pct) { if (prog) prog.textContent = "历史复盘计算中：" + pct + "%（走前模拟 " + nRev + " 期）"; }, function(r) {
             b2.disabled = false;
             if (!r) { if (prog) prog.textContent = "历史数据不足，无法复盘"; return; }
             const all = JSON.parse(localStorage.getItem("lt30_hist_v1") || "{}");
@@ -563,7 +564,7 @@
             localStorage.setItem("lt30_hist_v1", JSON.stringify(all));
             renderGame(g);
             toast(GAMES[g].name + " 历史复盘完成：" + r.n + " 期走前模拟");
-          }, 80);
+          });
         }
         return;
       }
