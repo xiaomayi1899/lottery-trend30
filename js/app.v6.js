@@ -360,7 +360,7 @@
     if (fresh) {
       const r = cached.r;
       h += '<div class="hint mono">' + r.sets.map((s) => esc(s.tag) + " 场均命中 " + s.avg.toFixed(2)).join(" · ") + "</div>";
-      h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）· 共 " + r.rows.length + " 期走前模拟，逐期展开看「预测 vs 实开」逐号对比，金圈 = 命中。</div>";
+      h += '<div class="hint">随机期望命中 ' + exF.toFixed(2) + " 个 · 奇偶/奇数个数精确命中 " + Math.round(r.formHit * 100) + "%（±1 容差 " + Math.round(r.formTol * 100) + "%）· 共 " + r.rows.length + " 期走前模拟。每一行的含义：用<strong>该期之前</strong>的开奖数据为该期做预测，再对照该期实开——绝不用开奖后的数据装预测。</div>";
       const rev = (nums, marks, blue) => {
         let s2 = "";
         (nums || []).forEach((n, i) => {
@@ -373,7 +373,7 @@
         const cfg2 = GAMES[g];
         const front = row.actual.slice(0, cfg2.draw);
         const back = cfg2.bk ? row.actual.slice(cfg2.draw) : [];
-        let body = '<div class="hint mono">实开：' + rev(front, null) + (back.length ? '<span class="vs">+</span>' + rev(back, null, true) : "") + "</div>";
+        let body = '<div class="hint mono">预测依据：截至第 ' + esc(row.basedOn) + " 期开奖（不含其后数据）→ 对照第 " + esc(row.issue) + " 期实开：" + rev(front, null) + (back.length ? '<span class="vs">+</span>' + rev(back, null, true) : "") + "</div>";
         row.sets.forEach((s, idx) => {
           if (cfg2.type === "digits") {
             const marks = s.f.map((v, p) => v === row.actual[p]);
@@ -384,7 +384,7 @@
             body += '<div class="hint mono">' + esc(s.tag) + "：" + rev(s.f, mf) + (s.b && back.length ? '<span class="vs">+</span>' + rev(s.b, mb, true) : "") + "（红 " + row.cells[idx] + (mb ? "，后区命中 " + mb.filter(Boolean).length + " 个" : "") + "）</div>";
           }
         });
-        return '<details class="step"><summary>第' + esc(row.issue) + "期 · " + row.cells.join("/") + "</summary><div class=\"body\">" + body + "</div></details>";
+        return '<details class="step"><summary>预测第' + esc(row.issue) + "期（用≤" + esc(row.basedOn) + "数据） · " + row.cells.join("/") + "</summary><div class=\"body\">" + body + "</div></details>";
       };
       h += '<div style="margin-top:8px">' + r.rows.slice().reverse().map(revRow).join("") + "</div>";
       h += '<div class="hint" style="margin-top:8px">复盘命中贴近随机期望 = 正常且符合「开奖独立随机」；此表长期记录策略真实水位。</div>';

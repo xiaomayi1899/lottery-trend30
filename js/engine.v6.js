@@ -826,7 +826,7 @@
         const predO = parseInt(String(r.form.odd), 10);
         if (predO === actO) formHit++;
         if (Math.abs(predO - actO) <= 1) formTol++;
-        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), cells: cells, sets: setsOut, actual: act.nums.slice() });
+        rows.push({ issue: String(act.issue), date: String(act.date).slice(0, 10), basedOn: String(full[i - 1].issue), cells: cells, sets: setsOut, actual: act.nums.slice() });
         cnt++;
       }
     } finally { DATA[key] = full; }
